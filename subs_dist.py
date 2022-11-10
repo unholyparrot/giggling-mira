@@ -27,6 +27,10 @@ def setup_args():
                         type=str, required=True,
                         help="Pattern for the output, three files would be created here -- matrix, columns, rows.")
 
+    parser.add_argument('-ignore', '--ignore',
+                        type=str, required=False,
+                        help="Path for the file with the mutations to be ignored")
+
     parser.add_argument('-lb', '--lb',
                         type=int, required=False,
                         default=266, help="Left border for the ignored mutations")
@@ -44,12 +48,19 @@ def main():
     logger.debug(f"Output would be like {args.output}_example.txt")
     logger.debug(f"Left border: {args.lb}, right border: {args.rb}")
 
+    set_of_mutations = set()
+
+    if args.ignore:
+        with open(args.ignore, "r") as fr:
+            list_of_muts = fr.read().splitlines()
+        set_of_mutations = set(list_of_muts)
+
     def clear_weak_mutations(record, lb=args.lb, rb=args.rb):
         to_ret = []
         splitted = record.split(",")
         for elem in splitted:
             if re.match(r'^[A-Z]\d{1,5}[A-Z]$', elem):
-                if lb <= int(elem[1:-1]) <= rb:
+                if (lb <= int(elem[1:-1]) <= rb) and (elem not in set_of_mutations):
                     to_ret.append(elem)
         return ",".join(to_ret)
 
