@@ -1,6 +1,6 @@
 import argparse
 import re
-from functools import reduce
+import datetime
 
 import numpy as np
 import pandas as pd
@@ -8,6 +8,7 @@ import pandas as pd
 from loguru import logger
 from sklearn.feature_extraction.text import CountVectorizer
 from tqdm.auto import tqdm
+from pandarallel import pandarallel
 
 
 def setup_args():
@@ -31,6 +32,10 @@ def setup_args():
                         type=str, required=False,
                         help="Path for the file with the mutations to be ignored")
 
+    parser.add_argument('-nt', '--num_threads',
+                        type=int, required=False,
+                        default=4, help="Number of workers for the parallel correction calculation")
+
     parser.add_argument('-lb', '--lb',
                         type=int, required=False,
                         default=266, help="Left border for the ignored mutations")
@@ -47,13 +52,16 @@ def main():
     logger.add(f"{args.output}_records.log")
     logger.debug(f"Output would be like {args.output}_example.txt")
     logger.debug(f"Left border: {args.lb}, right border: {args.rb}")
+    logger.debug(f"Number of workers for corrections calculation: {args.nt}")
+
+    pandarallel.initialize(nb_workers=args.nt, progress_bar=True)
 
     set_of_mutations = set()
 
     if args.ignore:
         with open(args.ignore, "r") as fr:
-            list_of_muts = fr.read().splitlines()
-        set_of_mutations = set(list_of_muts)
+            list_of_mutations = fr.read().splitlines()
+        set_of_mutations = set(list_of_mutations)
 
     def clear_weak_mutations(record, lb=args.lb, rb=args.rb):
         to_ret = []
@@ -64,19 +72,19 @@ def main():
                     to_ret.append(elem)
         return ",".join(to_ret)
 
-    def get_functional_interval(elem):
+    def get_dense_interval(elem):
         res = []
-        if elem == '':
+        if elem == "":
             elem = '99999'
         for cur in elem.split(','):
             interval = list(map(int, cur.split('-')))
             if len(interval) == 1:
-                res.append(lambda arr, _value=interval[0]: arr == _value)
+                res.append([int(interval[0])])
             elif len(interval) == 2:
-                res.append(lambda arr, a=interval[0], b=interval[1]: np.logical_and(arr >= a, arr <= b))
+                res.append(np.arange(interval[0], interval[1] + 1))
             else:
                 raise ValueError(f"Bad interval: {cur}")
-        return lambda x: reduce(np.logical_or, [op(x) for op in res.copy()])
+        return np.concatenate(res)
 
     def prepare_table(path, table_idx=1):
         df = pd.read_csv(path, sep="\t",
@@ -93,36 +101,32 @@ def main():
         df['numbers'] = df['substitutions'].apply(
             lambda x: np.array([int(elem[1:-1]) for elem in x.split(',') if re.match(r'^[A-Z]\d{1,5}[A-Z]$', elem)]))
         # создаем интервалы
-        df['func_intervals'] = df['missing'].apply(get_functional_interval)
+        df['intervals'] = df['missing'].apply(get_dense_interval)
 
         logger.debug(f"Table {table_idx} is read")
 
         return df
 
-    def if_skipped_final(_row_1, _row_2):
-        return _row_1['func_intervals'](_row_2['numbers']).sum() + _row_2['func_intervals'](_row_1['numbers']).sum()
-
     logger.debug(f"First table (rows): {args.first}")
-    refer = prepare_table(args.first)  # читаем первую таблицу
+    target = prepare_table(args.first)  # читаем первую таблицу
 
     # ура, костыль на вторую таблицу
     if args.second:
         logger.debug(f"Second table (columns): {args.second}")
-        target = prepare_table(args.second, table_idx=2)
+        refer = prepare_table(args.second, table_idx=2)
     else:
         logger.debug(f"No second table, matrix would be squared")
-        target = refer
+        refer = target
 
     logger.info("Calculation of corrections, prepare your RAM and patience")
-    # вычисляем матрицу коррекций скора
-    correction_final = np.zeros((refer.shape[0], target.shape[0]))
-    for idx_1, (_, row_1) in enumerate(tqdm(refer.iterrows(), total=len(refer))):
-        for idx_2, (_, row_2) in enumerate(target.iterrows()):
-            value = if_skipped_final(row_1, row_2)
-            if value > 0:
-                correction_final[idx_1][idx_2] = value
-
-    correction_final = correction_final.astype(int)
+    start_t = datetime.datetime.now()
+    # вычисляем матрицу коррекций скора при помощи pandarallel
+    future_matrix = target.parallel_apply(lambda x: np.array(
+        [np.isin(x['numbers'], a).sum() + np.isin(b, x['intervals']).sum() for a, b in
+         refer[["intervals", "numbers"]].values]), axis=1)
+    logger.debug(f"Raw correction matrix calculation time: {str(datetime.datetime.now() - start_t)}")
+    # превращаем из Series в numpy-массив
+    correction_final = np.vstack(future_matrix.values)
     logger.success(f"Correction min: {np.min(correction_final)}, correction max: {np.max(correction_final)}")
 
     logger.debug("Creating model for distances")
@@ -130,12 +134,12 @@ def main():
 
     logger.debug("Fitting all values to model")
     # передаем в неё вообще все значения
-    count_vect.fit_transform(refer["substitutions"].values.tolist() + target["substitutions"].values.tolist())
+    count_vect.fit_transform(target["substitutions"].values.tolist() + refer["substitutions"].values.tolist())
 
     logger.debug("Passing table values to the model")
     # получаем реальные вектора в пространстве всех мутация для каждой записи
-    data_a_counts = count_vect.transform(refer["substitutions"].values.tolist())
-    data_b_counts = count_vect.transform(target["substitutions"].values.tolist())
+    data_a_counts = count_vect.transform(target["substitutions"].values.tolist())
+    data_b_counts = count_vect.transform(refer["substitutions"].values.tolist())
 
     logger.info("Calculation of intersections, prepare your RAM")
     # вычисляем матрицу пересечений между сетами
@@ -144,8 +148,8 @@ def main():
 
     logger.debug("Calculating the score")
     # получим размеры множества мутаций для каждого сиквенса
-    len_a = np.array([len(cur_set) for cur_set in [elem.split(",") for elem in refer["substitutions"]]])
-    len_b = np.array([len(cur_set) for cur_set in [elem.split(",") for elem in target["substitutions"]]])
+    len_a = np.array([len(cur_set) for cur_set in [elem.split(",") for elem in target["substitutions"]]])
+    len_b = np.array([len(cur_set) for cur_set in [elem.split(",") for elem in refer["substitutions"]]])
     # получаем матрицу score
     dist_mat = len_a[..., None] + len_b[None, ...] - 2 * intersections
 
@@ -161,10 +165,10 @@ def main():
         for row in tqdm(as_list):
             one_line = ";".join(map(str, row)) + "\n"
             wr.write(one_line)
-    with open(args.output + "_columns.txt", "w") as wr:
+    with open(args.output + "_rows.txt", "w") as wr:
         wr.write("\n".join(target.index))
         wr.write("\n")
-    with open(args.output + "_rows.txt", "w") as wr:
+    with open(args.output + "_columns.txt", "w") as wr:
         wr.write("\n".join(refer.index))
         wr.write("\n")
 
