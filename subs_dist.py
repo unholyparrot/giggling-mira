@@ -52,7 +52,7 @@ def main():
     logger.add(f"{args.output}_records.log")
     logger.debug(f"Output would be like {args.output}_example.txt")
     logger.debug(f"Left border: {args.lb}, right border: {args.rb}")
-    logger.debug(f"Number of workers for corrections calculation: {args.nt}")
+    logger.debug(f"Number of workers for corrections calculation: {args.num_threads}")
 
     pandarallel.initialize(nb_workers=args.nt, progress_bar=True)
 
