@@ -54,7 +54,7 @@ def main():
     logger.debug(f"Left border: {args.lb}, right border: {args.rb}")
     logger.debug(f"Number of workers for corrections calculation: {args.num_threads}")
 
-    pandarallel.initialize(nb_workers=args.nt, progress_bar=True)
+    pandarallel.initialize(nb_workers=args.num_threads, progress_bar=True)
 
     set_of_mutations = set()
 
