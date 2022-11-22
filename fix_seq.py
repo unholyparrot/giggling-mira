@@ -75,12 +75,12 @@ def filter_only(record):
 def main():
     args = setup_args()
     logger.add(f"{args.output}_records.log")
-    logger.add(f"{args.output}_trace.log", filter=filter_only)
+    logger.add(f"{args.output}_trace.log", filter=filter_only, level="TRACE")
     logger.info(f"Output would be like {args.output}_example.txt")
 
-    with open(args.inp + "_rows.txt", "r") as fr:
+    with open(args.input_p + "_rows.txt", "r") as fr:
         rows_names = fr.read().splitlines()
-    with open(args.inp + "_columns.txt", "r") as fr:
+    with open(args.input_p + "_columns.txt", "r") as fr:
         cols_names = fr.read().splitlines()
 
     to_fix_dict = dict()
@@ -122,7 +122,7 @@ def main():
     logger.debug("Remember to delete the tmp directory manually if the program crashes")
 
     # читаем DataFrame
-    df = pd.read_csv(args.inp + "_matrix.txt", sep=";", names=cols_names, index_col=False, dtype=float)
+    df = pd.read_csv(args.input_p + "_matrix.txt", sep=";", names=cols_names, index_col=False, dtype=float)
     df["idx"] = rows_names
     df.set_index("idx", inplace=True)
     logger.debug(f"Matrix desc: shape {df.shape}; min {np.min(df.to_numpy())}; max {np.max(df.to_numpy())}")
