@@ -187,10 +187,10 @@ def main():
                 under_construction[cur_int_lb:cur_int_rb] = [_ for _ in current_proceedings[asv[0]][wr_lb:wr_rb][
                                                                         cur_int_lb:cur_int_rb]]
                 fixed_intervals += 1
-                if re.match("[nN]+", current_proceedings[target][cur_int_lb:cur_int_rb]):
+                if re.match("[nN]+", current_proceedings[target][wr_lb:wr_rb][cur_int_lb:cur_int_rb]):
                     logger.trace(f"({cur_int_lb}, {cur_int_rb}) fixed UNKNOWN")
                 else:
-                    logger.trace(f"({cur_int_lb}, {cur_int_rb}) fixed UNCERTAIN")
+                    logger.trace(f"({cur_int_lb}, {cur_int_rb}) fixed UNSURE")
             else:
                 logger.trace(f"({cur_int_lb}, {cur_int_rb}) NOT FIXED")
 
