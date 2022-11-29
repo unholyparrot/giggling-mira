@@ -134,64 +134,74 @@ def main():
 
     # начинаем весьма постепенный парсинг
     logger.debug("Iteration over files, fixing and writing")
-    with open(args.output + "_fixed.fasta", "w") as out_fwr:
-        for target in tqdm(df.index, desc="Fixing process and writing to file"):
-            # получаем минимальное значение по массиву
-            min_value = df.loc[target].sort_values(na_position='last')[0]
-            # находим имена всех последовательностей с этим минимальным значением
-            asv = df.loc[target][lambda x: x == min_value].index
-            logger.trace(f">>{target}; score {min_value}; neighbours {len(asv)}")
-            logger.trace(";".join(asv))
-            # пишем в файл во временной директории референс, целевую последовательность, ближайшие последовательности
-            with open(os.path.join(var_temp_dir, "tmp.fasta"), "w") as wrf:
-                wrf.write(f">{reference_name}\n{reference_seq}\n")
-                wrf.write(f">{target}\n{linecache.getline(args.to_fix, to_fix_dict[target])}")
-                for close_seq in asv:
-                    wrf.write(f">{close_seq}\n{linecache.getline(args.fix_kit, fixing_dict[close_seq])}")
-            # создаем объект для маффта
-            mafft_cline = MafftCommandline(input=os.path.join(var_temp_dir, "tmp.fasta"))
-            # запускаем объект для маффта
-            stdout, stderr = mafft_cline()
-            # создаем словарь для хранения выравниваний
-            current_proceedings = dict()
-            # читаем из stdout в буфер без записи в файл, а с записью в словарь хранения выравниваний
-            parser = FastaIO.SimpleFastaParser(StringIO(stdout))
-            for ali_name, ali_seq in parser:
-                current_proceedings[ali_name] = ali_seq
-            # создаем переменную для хранения интервала начала кодирующей части
-            search_ali_start = re.match(r"^-+[a-z]", current_proceedings[reference_name])
-            # создаем переменную для хранения интервала конца кодирующей части
-            search_ali_end = re.search(r"[a-z]-+$", current_proceedings[reference_name])
-            # получаем переменные для хранения начала и конца кодирующих частей
-            wr_lb, wr_rb = search_ali_start.end() - 1, search_ali_end.start() + 1
-            # ищем [nN]+ в кодирующей части целевой последовательности
-            found_ns = [(m.start(0),
-                         m.end(0)) for m in re.finditer("[nN]+", current_proceedings[target][wr_lb:wr_rb])]
-            # производим замену выбранных интервалов
-            resulting_seq_beginning = current_proceedings[target][:wr_lb]  # кусок, который не чиним
-            under_construction = [_ for _ in current_proceedings[target][wr_lb:wr_rb]]  # кусок, который чиним
-            resulting_seq_ending = current_proceedings[target][wr_rb:]  # кусок в конце, который не чиним
-            # итерируемся по интервалам
-            fixed_intervals = 0
 
-            logger.trace(f"Found {len(found_ns)} N intervals")
+    out_fwr = open(args.output + "_fixed.fasta", "w")
+    out_not_fwr = open(args.output + "_not_fixed.fasta", "w")
 
-            for cur_int_lb, cur_int_rb in found_ns:
-                # проверяем, все ли ближайшие последовательности равны в этом интервале
-                if all_equal([current_proceedings[x][wr_lb:wr_rb][cur_int_lb:cur_int_rb] for x in asv]):
-                    # если да, то записываем это в исправленную часть
-                    fixed_intervals += 1
-                    under_construction[cur_int_lb:cur_int_rb] = [_ for _ in current_proceedings[asv[0]][wr_lb:wr_rb][
-                                                                            cur_int_lb:cur_int_rb]]
-                    logger.trace(f"({cur_int_lb}, {cur_int_rb}) fixed")
+    for target in tqdm(df.index, desc="Fixing process and writing to file"):
+        # получаем минимальное значение по массиву
+        min_value = df.loc[target].sort_values(na_position='last')[0]
+        # находим имена всех последовательностей с этим минимальным значением
+        asv = df.loc[target][lambda x: x == min_value].index
+        logger.trace(f">>{target}; score {min_value}; neighbours {len(asv)}")
+        logger.trace(";".join(asv))
+        # пишем в файл во временной директории референс, целевую последовательность, ближайшие последовательности
+        with open(os.path.join(var_temp_dir, "tmp.fasta"), "w") as wrf:
+            wrf.write(f">{reference_name}\n{reference_seq}\n")
+            wrf.write(f">{target}\n{linecache.getline(args.to_fix, to_fix_dict[target])}")
+            for close_seq in asv:
+                wrf.write(f">{close_seq}\n{linecache.getline(args.fix_kit, fixing_dict[close_seq])}")
+        # создаем объект для маффта
+        mafft_cline = MafftCommandline(input=os.path.join(var_temp_dir, "tmp.fasta"))
+        # запускаем объект для маффта
+        stdout, stderr = mafft_cline()
+        # создаем словарь для хранения выравниваний
+        current_proceedings = dict()
+        # читаем из stdout в буфер без записи в файл, а с записью в словарь хранения выравниваний
+        parser = FastaIO.SimpleFastaParser(StringIO(stdout))
+        for ali_name, ali_seq in parser:
+            current_proceedings[ali_name] = ali_seq
+        # создаем переменную для хранения интервала начала кодирующей части
+        search_ali_start = re.match(r"^-+[a-z]", current_proceedings[reference_name])
+        # создаем переменную для хранения интервала конца кодирующей части
+        search_ali_end = re.search(r"[a-z]-+$", current_proceedings[reference_name])
+        # получаем переменные для хранения начала и конца кодирующих частей
+        wr_lb, wr_rb = search_ali_start.end() - 1, search_ali_end.start() + 1
+        # ищем [nN]+ в кодирующей части целевой последовательности
+        found_unc_s = [(m.start(0),
+                       m.end(0)) for m in re.finditer("[ryswkmbdhvnRYSWKMBDHVN]+",
+                                                      current_proceedings[target][wr_lb:wr_rb])]
+        # производим замену выбранных интервалов
+        resulting_seq_beginning = current_proceedings[target][:wr_lb]  # кусок, который не чиним
+        under_construction = [_ for _ in current_proceedings[target][wr_lb:wr_rb]]  # кусок, который чиним
+        resulting_seq_ending = current_proceedings[target][wr_rb:]  # кусок в конце, который не чиним
+        # итерируемся по интервалам
+        fixed_intervals = 0
+
+        logger.trace(f"Found {len(found_unc_s)} N intervals")
+
+        for cur_int_lb, cur_int_rb in found_unc_s:
+            # проверяем, все ли ближайшие последовательности равны в этом интервале
+            if all_equal([current_proceedings[x][wr_lb:wr_rb][cur_int_lb:cur_int_rb] for x in asv]):
+                # если да, то записываем это в исправленную часть
+                under_construction[cur_int_lb:cur_int_rb] = [_ for _ in current_proceedings[asv[0]][wr_lb:wr_rb][
+                                                                        cur_int_lb:cur_int_rb]]
+                fixed_intervals += 1
+                if re.match("[nN]+", current_proceedings[target][cur_int_lb:cur_int_rb]):
+                    logger.trace(f"({cur_int_lb}, {cur_int_rb}) fixed UNKNOWN")
                 else:
-                    logger.trace(f"({cur_int_lb}, {cur_int_rb}) NOT FIXED")
+                    logger.trace(f"({cur_int_lb}, {cur_int_rb}) fixed UNCERTAIN")
+            else:
+                logger.trace(f"({cur_int_lb}, {cur_int_rb}) NOT FIXED")
 
-            # фиксируем созданную исправленную часть
-            resulting_seq = resulting_seq_beginning + "".join(under_construction) + resulting_seq_ending
-            res_seq_to_wr = "\n".join(textwrap.wrap(resulting_seq, 60))
+        # фиксируем созданную исправленную часть
+        resulting_seq = resulting_seq_beginning + "".join(under_construction) + resulting_seq_ending
+        res_seq_to_wr = "\n".join(textwrap.wrap(resulting_seq.replace("-", "").upper(), 60))
 
-            out_fwr.write(f">{target}|{fixed_intervals}/{len(found_ns)}|\n" + res_seq_to_wr + "\n")
+        if fixed_intervals == len(found_unc_s):
+            out_fwr.write(f">{target}|{fixed_intervals}/{len(found_unc_s)}|\n" + res_seq_to_wr + "\n")
+        else:
+            out_not_fwr.write(f">{target}|{fixed_intervals}/{len(found_unc_s)}|\n" + res_seq_to_wr + "\n")
 
     shutil.rmtree(var_temp_dir)
     logger.debug("Temporary directory was successfully deleted")
