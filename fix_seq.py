@@ -18,7 +18,7 @@ from tqdm.auto import tqdm
 from loguru import logger
 
 
-# TODO: добавить исправление начала кодирующей части
+# TODO: добавить конвертацию fasta-файлов с записью их в /tmp
 def setup_args():
     parser = argparse.ArgumentParser(description="The fixing if the sequences according to the " +
                                                  "distances matrix",
@@ -87,7 +87,7 @@ def main():
     to_fix_dict = dict()
     fixing_dict = dict()
 
-    logger.debug(f"TMP set is introduced")
+    logger.debug(f"TMP set for sequence's names is introduced")
     tmp_names_set = set(rows_names)
 
     with open(args.to_fix, "r") as fasta_ali:
@@ -105,7 +105,7 @@ def main():
                 fixing_dict[seq_name] = 2 * idx + 2  # добавляем индекс строки в файле выравнивания для linecache
 
     tmp_names_set = None
-    print(f"TMP set is now {tmp_names_set}")
+    logger.debug(f"TMP set is now {tmp_names_set}")
 
     logger.debug("First heading from to_fix fasta: " + linecache.getline(args.to_fix, 1).rstrip('\n'))
     logger.debug("First heading from fix_kit fasta: " + linecache.getline(args.fix_kit, 1).rstrip('\n'))
@@ -131,13 +131,12 @@ def main():
     logger.debug("Remember to delete the tmp directory manually if the program crashes")
 
     # читаем DataFrame
-    df = pd.read_csv(args.input_p + "_matrix.txt", sep=";", names=cols_names, index_col=False, dtype=float)
-    df["idx"] = rows_names
-    df.set_index("idx", inplace=True)
+    df = pd.DataFrame(np.loadtxt(args.input_p + "_matrix.txt", delimiter=";", dtype=float),
+                      index=rows_names, columns=cols_names)
     logger.debug(f"Matrix desc: shape {df.shape}; min {np.min(df.to_numpy())}; max {np.max(df.to_numpy())}")
 
     # убираем все значения на "диагональных" элементах (которые могут иметь и иные порядки)
-    for col_name in df.columns:
+    for col_name in tqdm(df.columns, total=df.shape[1], desc="Cleaning up DF from collisions"):
         if col_name in df.index:
             df.loc[col_name, col_name] = np.nan
 
