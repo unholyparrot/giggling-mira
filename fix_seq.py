@@ -121,7 +121,7 @@ def main():
 
     logger.debug(f"Ref: {reference_name} with {len(reference_seq)}, stripping as ({args.ref_lb}:{args.ref_rb})")
 
-    reference_seq = reference_seq[args.ref_lb + 1:args.ref_rb]
+    reference_seq = reference_seq[args.ref_lb - 1:args.ref_rb]
 
     logger.debug(f"Ref: {reference_name} with {len(reference_seq)} coding region length after stripping")
 
