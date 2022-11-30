@@ -18,6 +18,7 @@ from tqdm.auto import tqdm
 from loguru import logger
 
 
+# TODO: добавить исправление начала кодирующей части
 def setup_args():
     parser = argparse.ArgumentParser(description="The fixing if the sequences according to the " +
                                                  "distances matrix",
@@ -86,17 +87,25 @@ def main():
     to_fix_dict = dict()
     fixing_dict = dict()
 
+    logger.debug(f"TMP set is introduced")
+    tmp_names_set = set(rows_names)
+
     with open(args.to_fix, "r") as fasta_ali:
         parser = FastaIO.SimpleFastaParser(fasta_ali)
         for idx, (seq_name, seq_body) in tqdm(enumerate(parser), desc="Indexing to_fix Fasta"):
-            if seq_name in rows_names:
+            if seq_name in tmp_names_set:
                 to_fix_dict[seq_name] = 2 * idx + 2  # добавляем индекс строки в файле выравнивания для linecache
+
+    tmp_names_set = set(cols_names)
 
     with open(args.fix_kit, "r") as fasta_ali:
         parser = FastaIO.SimpleFastaParser(fasta_ali)
         for idx, (seq_name, seq_body) in tqdm(enumerate(parser), desc="Indexing fix_kit Fasta"):
-            if seq_name in cols_names:
+            if seq_name in tmp_names_set:
                 fixing_dict[seq_name] = 2 * idx + 2  # добавляем индекс строки в файле выравнивания для linecache
+
+    tmp_names_set = None
+    print(f"TMP set is now {tmp_names_set}")
 
     logger.debug("First heading from to_fix fasta: " + linecache.getline(args.to_fix, 1).rstrip('\n'))
     logger.debug("First heading from fix_kit fasta: " + linecache.getline(args.fix_kit, 1).rstrip('\n'))
