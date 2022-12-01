@@ -149,7 +149,7 @@ def main():
 
     for target in tqdm(df.index, desc="Fixing process and writing to file"):
         # получаем минимальное значение по массиву
-        min_value = df.loc[target].sort_values(na_position='last')[0]
+        min_value = np.nanmin(df.loc[target].values)
         # находим имена всех последовательностей с этим минимальным значением
         asv = df.loc[target][lambda x: x == min_value].index
         logger.trace(f">>{target}; score {min_value}; neighbours {len(asv)}")
