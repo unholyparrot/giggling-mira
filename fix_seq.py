@@ -19,6 +19,7 @@ from loguru import logger
 
 
 # TODO: добавить конвертацию fasta-файлов с записью их в /tmp
+# TODO: добавить try-except проверку наличия файла из df в файлах fasta, если нет, то warning
 def setup_args():
     parser = argparse.ArgumentParser(description="The fixing if the sequences according to the " +
                                                  "distances matrix",
@@ -152,6 +153,8 @@ def main():
         # находим имена всех последовательностей с этим минимальным значением
         asv = df.loc[target][lambda x: x == min_value].index
         logger.trace(f">>{target}; score {min_value}; neighbours {len(asv)}")
+        if len(asv) > 10:  # временная заглушка для большого количества ближайших
+            asv = np.random.choice(asv, 10)
         logger.trace(";".join(asv))
         # пишем в файл во временной директории референс, целевую последовательность, ближайшие последовательности
         with open(os.path.join(var_temp_dir, "tmp.fasta"), "w") as wrf:
