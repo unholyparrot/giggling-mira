@@ -242,6 +242,10 @@ def main():
             seq_for_wr = "\n".join(textwrap.wrap(linecache.getline(to_fix_fasta_path, to_fix_dict[target]), 60))
             out_not_fwr.write(f">{target}|-1/0|\n" + seq_for_wr + "\n")
 
+    # закрываем файлы после записи
+    out_fwr.close()
+    out_not_fwr.close()
+    # удаляем временную директорию
     shutil.rmtree(var_temp_dir)
     logger.debug("Temporary directory was successfully deleted")
 
