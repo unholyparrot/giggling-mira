@@ -105,7 +105,7 @@ class DateFilterException(Exception):
     def __init__(self, seq_name, seq_date):
         self.name = seq_name
         self.date = seq_date
-        super.__init__(self.name, self.date)
+        super(Exception, self).__init__()
 
 
 def all_equal(iterable):
