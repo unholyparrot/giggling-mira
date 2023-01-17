@@ -240,7 +240,7 @@ def main():
                 # получаем даты по индексам имен вдоль массива наименований
                 fixing_dates = cols_dates[df.columns.get_indexer(asv)]
                 # фильтруем массив наименований в соответствии с примененным условием на значение даты
-                dates_condition = np.where(fixing_dates < target_date)
+                dates_condition = np.where(fixing_dates <= target_date)
                 updated_asv = asv[dates_condition]
                 if len(updated_asv) == 0:  # если получилось, что длинна массива ноль
                     # и выходим из итерации, эту последовательность мы не чиним
