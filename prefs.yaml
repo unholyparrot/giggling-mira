@@ -22,3 +22,6 @@ subs:
     - 'USA'
   exc_location:
     - 'Germany'
+  exc_date:
+    lb_date: "2019-01-01"
+    rb_date: "2024-01-01"

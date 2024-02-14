@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import os
 import time
 import re
@@ -6,6 +7,7 @@ import textwrap
 
 from loguru import logger
 import yaml
+import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 from Bio.SeqIO.FastaIO import SimpleFastaParser
@@ -66,6 +68,8 @@ if __name__ == "__main__":
     df = pd.read_csv(args.meta, sep="\t", dtype=preferences["META_COLS"],
                      usecols=list(preferences["META_COLS"].keys()))
 
+    logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tBefore dropping empty indexes")
+
     df.drop_duplicates(subset=["Virus name"], keep=False, inplace=True)
     df.set_index('Virus name', inplace=True)
 
@@ -83,14 +87,27 @@ if __name__ == "__main__":
         ]
     logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter NC and Length")
 
+    df = df[
+        (df["Collection date"].astype(np.datetime64) >= datetime.datetime.strptime(preferences['subs']['lb_date'],
+                                                                                   "%Y-%m-%d")) &
+        (df["Collection date"].astype(np.datetime64) <= datetime.datetime.strptime(preferences['subs']['rb_date'],
+                                                                                   "%Y-%m-%d"))
+        ]
+
+    logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter collection date")
+
     df = df[df['Pango lineage'].str.contains(preferences['subs']['lineage_regex'], na=False)]
     logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter lineage")
 
-    # if preferences['subs'].get('inc_location'):
-    #     for elem in preferences['subs']['inc_location']:
-    #         df = df[df['Location'].str.contains(elem, na=False)]
-    #         logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter location")
+    loc_includes = ~df["Location"].str.startswith("")
 
+    if preferences['subs'].get('inc_location'):
+        for elem in preferences['subs']['inc_location']:
+            loc_includes += df['Location'].str.contains(elem, na=False)
+    df = df[loc_includes].copy(deep=True)
+    logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter including all locations")
+
+    # Исключение локаций
     if preferences['subs'].get('exc_location'):
         for elem in preferences['subs']['exc_location']:
             df = df[~df['Location'].str.contains(elem, na=False)]
@@ -141,3 +158,4 @@ if __name__ == "__main__":
 
     fa_wr.close()
     me_wr.close()
+:
