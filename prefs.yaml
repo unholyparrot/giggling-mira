@@ -14,14 +14,15 @@ META_COLS:          # обязательно, пофиксить имена пр
 subs:
   lb_n_content: 0.00  # обязательно
   rb_n_content: 0.01  # обязательно
-  rb_length: 29000    # обязательно
-  lb_length: 35000    # обязательно
+  lb_length: 29000    # обязательно
+  rb_length: 35000    # обязательно
+  # тоже обязательно, важно понмить, что регулярка
   lineage_regex: '^BA\.2$|^BA\.2\.\d+$|^BG|^BH|^BJ|^BL|^BM|^BN|^BP|^BR|^BS|^BY|^CA|^CB|^CH|^CJ|^CM|^CV|^DD|^DS|^DV|^EJ|^EP|^FJ|^FK|^FR|^FS|^FV|^GP|^GQ'
-  inc_location:
+  inc_location:  # опционально, если не нужно, то выклоючить
     - 'Russia'
     - 'USA'
-  exc_location:
+  exc_location:  # опционально, если не нужно, то выключить
     - 'Germany'
-  exc_date:
+  exc_date:  # опционально, если не нужно, закомментить
     lb_date: "2019-01-01"
     rb_date: "2024-01-01"

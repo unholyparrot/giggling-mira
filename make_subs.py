@@ -1,6 +1,5 @@
 import argparse
 import datetime
-import os
 import time
 import re
 import textwrap
@@ -25,7 +24,7 @@ def setup_args():
                           type=str, required=True,
                           help="Input path for GISAID sequences, FASTA")
 
-    m_parser.add_argument('-out', '--output',
+    m_parser.add_argument('-out', '--out',
                           type=str, required=True,
                           help="Output patter, three files would be created here — metadata, fasta, logs.")
 
@@ -39,9 +38,9 @@ def setup_args():
 if __name__ == "__main__":
     args = setup_args()
 
-    out_fasta = os.path.join(args.out, "_sequences.fasta")
-    out_meta = os.path.join(args.out, "_meta.tsv")
-    out_logs = os.path.join(args.out, "_notes.log")
+    out_fasta = args.out + "_sequences.fasta"
+    out_meta = args.out + "_meta.tsv"
+    out_logs = args.out + "_notes.log"
 
     logger.add(out_logs, level="DEBUG",
                colorize=True,
@@ -64,11 +63,10 @@ if __name__ == "__main__":
 
     st_t = time.time()
 
-    # parse_dates=['Collection date', 'Submission date']  можно добавить в чтение таблицы, если нужны даты
     df = pd.read_csv(args.meta, sep="\t", dtype=preferences["META_COLS"],
                      usecols=list(preferences["META_COLS"].keys()))
 
-    logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tBefore dropping empty indexes")
+    logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tBefore dropping Virus name duplicates")
 
     df.drop_duplicates(subset=["Virus name"], keep=False, inplace=True)
     df.set_index('Virus name', inplace=True)
@@ -82,30 +80,30 @@ if __name__ == "__main__":
     df = df[
         (df['N-Content'] >= preferences['subs']['lb_n_content']) &
         (df['N-Content'] <= preferences['subs']['rb_n_content']) &
-        (df['Sequence length'] >= preferences['subs']['lb_length']) &
+        (df['Sequence length'] >= preferences['subs']['lb_length']) & 
         (df['Sequence length'] <= preferences['subs']['rb_length'])
         ]
     logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter NC and Length")
 
-    df = df[
-        (df["Collection date"].astype(np.datetime64) >= datetime.datetime.strptime(preferences['subs']['lb_date'],
-                                                                                   "%Y-%m-%d")) &
-        (df["Collection date"].astype(np.datetime64) <= datetime.datetime.strptime(preferences['subs']['rb_date'],
-                                                                                   "%Y-%m-%d"))
-        ]
+    if preferences['subs'].get('exc_date'):
+        df = df[
+            (df["Collection date"].astype(np.datetime64) >= datetime.datetime.strptime(preferences['subs']['exc_date']['lb_date'],
+                                                                                       "%Y-%m-%d")) &
+            (df["Collection date"].astype(np.datetime64) <= datetime.datetime.strptime(preferences['subs']['exc_date']['rb_date'],
+                                                                                       "%Y-%m-%d"))
+            ]
 
-    logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter collection date")
+        logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter collection date")
 
     df = df[df['Pango lineage'].str.contains(preferences['subs']['lineage_regex'], na=False)]
     logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter lineage")
 
-    loc_includes = ~df["Location"].str.startswith("")
-
     if preferences['subs'].get('inc_location'):
+        loc_includes = ~df["Location"].str.startswith("")
         for elem in preferences['subs']['inc_location']:
-            loc_includes += df['Location'].str.contains(elem, na=False)
-    df = df[loc_includes].copy(deep=True)
-    logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter including all locations")
+            loc_includes |= df['Location'].str.contains(elem, na=False)
+        df = df[loc_includes].copy(deep=True)
+        logger.debug(f"DataFrame shape: {df.shape[0]}\t|\tAfter including all locations")
 
     # Исключение локаций
     if preferences['subs'].get('exc_location'):
